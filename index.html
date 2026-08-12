@@ -158,5 +158,8 @@
   loadEvents().then(renderApply).catch(() => { $('eventTitle').textContent = '报名系统尚未配置'; $('eventDesc').textContent = '管理员请先完成 Supabase 配置。'; $('applyForm').style.display = 'none'; });
 })();
 </script>
+<script>
+document.getElementById('success').textContent = '家长您好，恭喜您已报名成功！';
+</script>
 </body>
 </html>
