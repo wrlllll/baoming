@@ -64,6 +64,7 @@
   const now = () => new Date();
   const localDate = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   let db = { events: [], registrations: [] };
+  let selectedEventId = '';
   const mapEvent = e => ({ id: e.id, name: e.name, description: e.description || '', start: e.start_at, end: e.end_at });
   const mapRegistration = (r, events) => ({ id: r.id, eventId: r.event_id, createdAt: r.created_at, name: r.student_name, grade: r.grade, phone: r.phone, subject: r.subject, category: events.find(e => e.id === r.event_id)?.name || '已删除活动' });
   const openEvents = () => db.events.filter(e => now() >= new Date(e.start) && now() <= new Date(e.end)).sort((a, b) => new Date(b.start) - new Date(a.start));
@@ -93,7 +94,9 @@
     $('deadline').textContent = '当前开放：' + events.map(e => e.name).join('、'); form.style.display = 'block';
   }
   function renderAdmin() {
-    const current = activeEvent(); const regs = current ? db.registrations.filter(r => r.eventId === current.id) : [];
+    const current = db.events.find(e => e.id === selectedEventId) || activeEvent() || db.events[0];
+    if (current) selectedEventId = current.id;
+    const regs = current ? db.registrations.filter(r => r.eventId === current.id) : [];
     const today = now().toDateString(); $('countAll').textContent = regs.length; $('countToday').textContent = regs.filter(r => new Date(r.createdAt).toDateString() === today).length; $('countTotal').textContent = db.registrations.length;
     $('dataEventName').textContent = current ? '当前活动：' + current.name : '当前没有有效活动';
     $('registrationRows').innerHTML = regs.length ? regs.map(r => `<tr><td>${esc(new Date(r.createdAt).toLocaleString('zh-CN', { hour12: false }))}</td><td>${esc(r.name)}</td><td>${esc(r.grade)}</td><td>${esc(r.phone)}</td><td>${esc(r.subject)}</td><td>${esc(r.category)}</td></tr>`).join('') : '<tr><td colspan="6" style="text-align:center;color:#62717e;padding:28px">暂无报名数据</td></tr>';
@@ -125,7 +128,8 @@
     if (error) return alert('保存失败：' + error.message); await loadAdminData(); $('eventModal').classList.remove('open'); renderAdmin(); renderApply();
   });
   $('eventList').addEventListener('click', async e => { const id = e.target.dataset.id; if (!id) return; const event = db.events.find(x => x.id === id); if (e.target.classList.contains('edit-event')) return openModal(event); if (e.target.classList.contains('delete-event') && confirm('删除此活动？已提交的报名记录也会一并删除。')) { const { error } = await sb.from('events').delete().eq('id', id); if (error) return alert('删除失败：' + error.message); await loadAdminData(); renderAdmin(); renderApply(); } });
-  $('clearBtn').onclick = async () => { const event = activeEvent(); if (!event || !confirm(`清空“${event.name}”的全部报名数据？此操作不可恢复。`)) return; const { error } = await sb.from('registrations').delete().eq('event_id', event.id); if (error) return alert('清空失败：' + error.message); await loadAdminData(); renderAdmin(); };
+  $('exportEvent').onchange = e => { selectedEventId = e.target.value; renderAdmin(); };
+  $('clearBtn').onclick = async () => { const event = db.events.find(e => e.id === selectedEventId); if (!event || !confirm(`清空“${event.name}”的全部报名数据？此操作不可恢复。`)) return; const { error } = await sb.from('registrations').delete().eq('event_id', event.id); if (error) return alert('清空失败：' + error.message); await loadAdminData(); renderAdmin(); };
   $('exportBtn').onclick = () => { const id = $('exportEvent').value, event = db.events.find(e => e.id === id), rows = [['提交时间','学生姓名','年级','联系电话','所选科目','报名活动'], ...db.registrations.filter(r => r.eventId === id).map(r => [new Date(r.createdAt).toLocaleString('zh-CN', { hour12: false }), r.name, r.grade, r.phone, r.subject, r.category])]; const csv = '\uFEFF' + rows.map(row => row.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\r\n'); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = (event?.name || '报名数据') + '.csv'; a.click(); URL.revokeObjectURL(a.href); };
   $('changePassword').onclick = async () => { const password = $('newPassword').value; if (password.length < 6) return alert('密码至少 6 位。'); const { error } = await sb.auth.updateUser({ password }); if (error) return alert('更新失败：' + error.message); $('newPassword').value = ''; alert('管理员密码已更新。'); };
   $('printQr').onclick = () => window.print();
